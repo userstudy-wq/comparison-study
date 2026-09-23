@@ -4,5 +4,5 @@ window.STUDY_CONFIG = {
   site_key: "",            /* optional shared key, must match SITE_KEY in Code.gs */
   comparisons: { "default": 20 },   /* comparisons per source and question; 8 sources x 20 = 160 per rater */
   epoch: "launch-2026-09-23-v3",   /* change this to discard every browser's saved runs and unsent answers */
-  version: "20260923121344"   /* bumped by remote/bump_version.py on each deploy (cache busting) */
+  version: "20260923123351"   /* bumped by remote/bump_version.py on each deploy (cache busting) */
 };

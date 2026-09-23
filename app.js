@@ -1,5 +1,5 @@
 /* Image and video comparison study: one link, two parts in random order per rater.
-     Part "diversity": Which set has more variety?                         (image grids, video strips)
+     Part "diversity": Which of the two sets is more diverse?               (image grids, video strips)
      Part "quality":   Which has better visual quality? + Which matches the prompt better?
    Each part: instructions -> practice with feedback -> forced A/B comparisons (image and video blocks).
    ?study=diversity or ?study=quality runs a single part. State lives in this browser; answers are
@@ -40,16 +40,16 @@
   /* ---------- wording ---------- */
   const UI = {
     diversity: {
-      name: 'Variety',
-      title: 'Which set has more variety?',
+      name: 'Diversity',
+      title: 'Which of the two sets is more diverse?',
       intro: 'You will see two sets of AI-generated images (16 per set) or short videos (5 per set), all made from the same text prompt. Choose the set whose items differ more from each other.',
       rules: [
-        ['What counts as variety.', 'Different subjects, poses, viewpoints, compositions, backgrounds, colors and styles.'],
-        ['Judge variety only.', 'We are not asking which set looks better. A plainer or blurrier set can still be the more varied one.'],
-        ['Off-prompt items add nothing.', 'Pictures that do not show what the prompt asks for (a cat when the prompt says dog), or broken pictures, do not count as variety.'],
+        ['What counts as diversity.', 'Diversity can be in identity, background, camera pose, lighting and so on.'],
+        ['Judge diversity only.', 'We are not asking which set looks better. A plainer or blurrier set can still be the more diverse one.'],
+        ['Off-prompt items add nothing.', 'Pictures that do not show what the prompt asks for (a cat when the prompt says dog), or broken pictures, do not count as diversity.'],
         ['Videos.', 'Compare the five clips of a set with each other. How much a single clip moves does not matter.'],
       ],
-      asks: ['Which set of images or videos has more variety?'],
+      asks: ['Which of the two sets is more diverse?'],
       questions: ['diversity'],
       secsPer: { image: 8, video: 12 },
     },
@@ -67,7 +67,7 @@
     },
   };
   const Q = {
-    diversity: (m) => ({ text: `Which set of ${m === 'video' ? 'videos' : 'images'} has more variety?`, help: m === 'video' ? 'Compare the five clips with each other. Variety only, not quality.' : 'Variety only, not quality. Off-prompt pictures add nothing.' }),
+    diversity: (m) => ({ text: 'Which of the two sets is more diverse?', help: m === 'video' ? 'Diversity in identity, background, camera pose, lighting and so on. Compare the five clips with each other; not quality.' : 'Diversity in identity, background, camera pose, lighting and so on. Not quality; off-prompt pictures add nothing.' }),
     quality: (m) => ({ text: `Which ${m} has better visual quality?`, help: m === 'video' ? 'Sharpness, realism, artifacts, smooth motion. Ignore the prompt.' : 'Sharpness, realism, artifacts, distortions. Ignore the prompt.' }),
     alignment: (m) => ({ text: `Which ${m} matches the prompt better?`, help: 'Right objects, how many, colors, positions. Ignore visual quality.' }),
   };
