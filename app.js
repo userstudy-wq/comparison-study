@@ -32,35 +32,67 @@
   const UA = navigator.userAgent.slice(0, 200);
   const CUR = `current:${plan}`, LAST = `last_done:${plan}`;
 
-  /* ---------- collector ---------- */
-  async function send(item) {
-    if (!CFG.endpoint) return true;
-    const body = JSON.stringify({ ...item, site_key: CFG.site_key || '' });
+  /* ---------- collector ----------
+     Answers go into a queue in localStorage and are sent in the background, so raters never wait.
+     With collector version >= 2 the whole queue goes in one request (the script de-duplicates);
+     with an older script, up to four single answers are sent in parallel. Failed sends are retried. */
+  const withTimeout = (ms) => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal; };
+  let serverVersion = null;   // null = not known yet
+  async function detectServer() {
+    if (serverVersion !== null) return serverVersion;
+    try { const j = await (await fetch(`${CFG.endpoint}?action=version`, { redirect: 'follow', signal: withTimeout(15000) })).json(); serverVersion = (j && j.version) || 1; }
+    catch (e) { return 1; }   // unknown for now: behave like the old script, ask again next time
+    return serverVersion;
+  }
+  async function send(payload) {
+    const body = JSON.stringify({ ...payload, site_key: CFG.site_key || '' });
     try {
-      const r = await fetch(CFG.endpoint, { method: 'POST', body, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, redirect: 'follow' });
-      if (r.ok) { try { const j = await r.json(); if (j && j.ok === false) return false; } catch (e) {} return true; }
-      return false;
+      const r = await fetch(CFG.endpoint, { method: 'POST', body, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, redirect: 'follow', signal: withTimeout(45000) });
+      if (!r.ok) return false;
+      try { const j = await r.json(); return !(j && j.ok === false); } catch (e) { return true; }
     } catch (e) {
       try { await fetch(CFG.endpoint, { method: 'POST', body, mode: 'no-cors' }); return true; } catch (e2) { return false; }
     }
   }
-  let flushing = null, again = false;
-  function flush() {   // one flush at a time; items are removed individually once delivered
+  const dropSent = (items) => { const ids = new Set(items.map((x) => x.eid)); store.set('queue', store.get('queue', []).filter((x) => !ids.has(x.eid))); };
+  let flushing = null, again = false, retry = null;
+  function flush() {
+    if (!CFG.endpoint) return Promise.resolve();   // not configured: keep answers in the browser, never drop them
     if (flushing) { again = true; return flushing; }
     flushing = (async () => {
+      let failed = false;
       do {
         again = false;
-        for (const item of store.get('queue', [])) {
-          if (await send(item)) store.set('queue', store.get('queue', []).filter((x) => x.eid !== item.eid));
+        let q = store.get('queue', []);
+        while (q.length && !failed) {
+          if ((await detectServer()) >= 2) {
+            const chunk = q.slice(0, 200);
+            if (await send({ batch: chunk })) dropSent(chunk); else failed = true;
+          } else {
+            const chunk = q.slice(0, 4);
+            const res = await Promise.all(chunk.map((it) => send(it)));
+            dropSent(chunk.filter((_, k) => res[k]));
+            failed = res.some((x) => !x);
+          }
+          q = store.get('queue', []);
         }
-      } while (again);
-    })().finally(() => { flushing = null; });
+      } while (again && !failed);
+    })().finally(() => {
+      flushing = null;
+      clearTimeout(retry);
+      if (store.get('queue', []).length) retry = setTimeout(flush, 8000);   // retry until everything is delivered
+    });
     return flushing;
   }
-  function post(item) { const q = store.get('queue', []); q.push({ eid: rid(), ...item }); store.set('queue', q); return flush(); }
-  async function getCounts() {   // per-pair judgment counts across all sections, one request
+  function post(item) { const q = store.get('queue', []); q.push({ eid: rid(), ...item }); store.set('queue', q); flush(); }
+  window.addEventListener('pagehide', () => {   // tab closing: hand the rest to the browser (safe: the v2 script skips duplicates)
+    const q = store.get('queue', []);
+    if (q.length && CFG.endpoint && serverVersion >= 2 && navigator.sendBeacon)
+      navigator.sendBeacon(CFG.endpoint, new Blob([JSON.stringify({ batch: q.slice(0, 200), site_key: CFG.site_key || '' })], { type: 'text/plain;charset=utf-8' }));
+  });
+  async function getCounts() {   // per-pair judgment counts, one request; never hold up the first comparison for long
     if (!CFG.endpoint) return {};
-    try { const r = await fetch(`${CFG.endpoint}?action=counts`, { redirect: 'follow' }); const j = await r.json(); return (j && j.counts) || {}; } catch (e) { return {}; }
+    try { const r = await fetch(`${CFG.endpoint}?action=counts`, { redirect: 'follow', signal: withTimeout(4000) }); const j = await r.json(); if (j && j.version) serverVersion = j.version; return (j && j.counts) || {}; } catch (e) { return {}; }
   }
 
   /* ---------- sampling ---------- */
@@ -162,15 +194,22 @@
 
   function renderDone(sess) {
     document.onkeydown = null;
-    const pending = store.get('queue', []).length;
+    const status = h('p', { class: 'muted small' });
+    const update = () => {
+      const n = store.get('queue', []).length;
+      status.className = n ? 'hint warn' : 'muted small';
+      status.textContent = n ? `Saving your answers (${n} left). Please keep this tab open for a moment.` : 'All answers are saved. You can close this tab now.';
+      return n;
+    };
     app.replaceChildren(h('div', { class: 'done' },
       h('div', { class: 'check' }, svg(CHECK)),
       h('h1', null, 'All done. Thank you!'),
       h('p', { class: 'muted' }, 'Your completion code:'),
       h('div', { class: 'code' }, sess.id.slice(0, 6).toUpperCase()),
-      pending ? h('p', { class: 'hint warn' }, `${pending} answers are still being sent. Please keep this tab open for a moment.`) : h('p', { class: 'muted small' }, 'You can close this tab now.'),
-      h('p', { class: 'again' }, h('button', { class: 'btn', onclick: async (e) => { e.target.disabled = true; e.target.textContent = 'Preparing…'; run(await newSession()); } }, 'Do another round'))));
-    flush().then(() => { if (pending && !app.querySelector('.choice')) renderDone(sess); });
+      status,
+      h('p', { class: 'again' }, h('button', { class: 'btn', onclick: async (e) => { clearInterval(poll); e.target.disabled = true; e.target.textContent = 'Preparing…'; run(await newSession()); } }, 'Do another round'))));
+    const poll = setInterval(() => { if (!update() || !app.contains(status)) clearInterval(poll); }, 700);
+    update(); flush();
   }
 
   /* ---------- start: resume, show completion, or go straight to the first comparison ---------- */
