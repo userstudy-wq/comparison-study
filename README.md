@@ -1,9 +1,10 @@
 # Comparison study
 
-Two pairwise comparison studies of AI-generated images and videos. Each starts with a short
-explanation and a few practice examples with feedback, then asks for a forced choice (A or B).
+A pairwise comparison study of AI-generated images and videos, in two parts that each start
+with a short explanation and a few practice examples with feedback:
 
-* Variety study: `?study=diversity` (default) - which set has more variety.
-* Quality study: `?study=quality` - which has better visual quality, and which matches the prompt better.
+* Variety: which set has more variety.
+* Quality: which has better visual quality, and which matches the prompt better.
 
-Answers are stored anonymously.
+One link runs both parts, in random order per participant. `?study=diversity` or
+`?study=quality` runs a single part. Answers are anonymous.
