@@ -95,7 +95,7 @@
   const valid = (s) => s && s.v === SCHEMA && Array.isArray(s.slates) && s.slates.length && s.slates.every((sl) => DATA.studies[sl.study] && sl.left && sl.right);
 
   /* ---------- rating ---------- */
-  let shownAt = 0, timer = null, tick = null;
+  let shownAt = 0;
   function mediaEl(m, label) {
     if (m.endsWith('.mp4')) {
       const v = h('video', { src: `media/${m}`, poster: `media/${m.slice(0, -4)}.jpg`, muted: true, loop: true, playsinline: true, preload: 'auto', 'aria-label': label });
@@ -109,9 +109,8 @@
 
   function run(sess) {
     async function answer(choice) {
-      const S = DATA.studies[sess.slates[sess.i].study];
-      if (performance.now() - shownAt < (S.min_seconds || 0) * 1000) return;
       const sl = sess.slates[sess.i];
+      if (!sl || sl.choice) return;
       sl.choice = choice; sl.seconds = (performance.now() - shownAt) / 1000;
       app.querySelectorAll('.choice').forEach((b) => (b.disabled = true));
       const done = store.get(`done:${sl.study}`, []); done.push(sl.pair); store.set(`done:${sl.study}`, done);
@@ -124,17 +123,15 @@
       render();
     }
     function render() {
-      clearTimeout(timer); clearInterval(tick);
       if (sess.i >= sess.slates.length) return renderDone(sess);
       const sl = sess.slates[sess.i], total = sess.slates.length, S = DATA.studies[sl.study];
       const newQuestion = sess.i > 0 && sess.slates[sess.i - 1].block !== sl.block;
       const helper = S.task === 'quality' ? '' : S.instructions.replace(/\s*Choose A, B, or No preference\.\s*/, ' ').trim();
       const btns = [
-        h('button', { class: 'choice side-a', disabled: true, onclick: () => answer('left') }, S.choices[0], h('kbd', null, '1')),
-        h('button', { class: 'choice', disabled: true, onclick: () => answer('tie') }, S.choices[1], h('kbd', null, '2')),
-        h('button', { class: 'choice side-b', disabled: true, onclick: () => answer('right') }, S.choices[2], h('kbd', null, '3')),
+        h('button', { class: 'choice side-a', onclick: () => answer('left') }, S.choices[0], h('kbd', null, '1')),
+        h('button', { class: 'choice', onclick: () => answer('tie') }, S.choices[1], h('kbd', null, '2')),
+        h('button', { class: 'choice side-b', onclick: () => answer('right') }, S.choices[2], h('kbd', null, '3')),
       ];
-      const lock = h('span', { class: 'lock', 'aria-live': 'polite' });
       const side = (label, m, letter) => h('div', { class: 'side' },
         h('div', { class: 'tag' }, h('span', { class: 'letter' }, letter), label),
         h('div', { class: 'media' }, mediaEl(m, label)));
@@ -150,19 +147,10 @@
         h('div', { class: 'actionbar' }, h('div', { class: 'in' },
           h('div', { class: 'count' }, h('b', null, sess.i + 1), ` / ${total}`),
           h('div', { class: 'choices' }, btns),
-          lock,
+          h('span'),
           !CFG.endpoint ? h('div', { class: 'testmode' }, 'Test mode: answers are not being saved yet.') : null)),
       );
       shownAt = performance.now();
-      const wait = Math.round((S.min_seconds || 0) * 1000);
-      const unlock = () => { btns.forEach((b) => (b.disabled = false)); lock.replaceChildren(); };
-      if (wait > 0) {
-        const left = () => Math.max(0, Math.ceil((wait - (performance.now() - shownAt)) / 1000));
-        const label = () => (S.media === 'video' ? `Watch both · ${left()}s` : `${left()}s`);
-        lock.replaceChildren(h('span', { class: 'ring' }), label());
-        tick = setInterval(() => { lock.lastChild.textContent = label(); }, 250);
-        timer = setTimeout(() => { clearInterval(tick); unlock(); }, wait);
-      } else unlock();
       window.scrollTo(0, 0);
       const nx = sess.slates[sess.i + 1];
       if (nx) for (const m of [nx.left, nx.right]) { if (!m.endsWith('.mp4')) { const im = new Image(); im.src = `media/${m}`; } else { fetch(`media/${m}`, { headers: { Range: 'bytes=0-262143' } }).catch(() => {}); } }

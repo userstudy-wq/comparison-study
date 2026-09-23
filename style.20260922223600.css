@@ -121,10 +121,6 @@ input[type=text]:focus { outline: 2px solid var(--focus); outline-offset: 1px; b
 .choice.side-a, .choice.side-b { border-color: var(--primary); color: var(--primary-ink); background: var(--primary-soft); }
 .choice.side-a:hover:not([disabled]), .choice.side-b:hover:not([disabled]) { background: var(--primary); color: var(--on-primary); }
 .choice[disabled] { opacity: .45; cursor: not-allowed; }
-.lock { justify-self: end; color: var(--text-3); font-size: .85rem; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
-.lock .ring { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--primary); animation: spin 1s linear infinite; }
-@media (prefers-reduced-motion: reduce) { .lock .ring { animation: none; } }
-@keyframes spin { to { transform: rotate(360deg); } }
 .testmode { grid-column: 1 / -1; text-align: center; color: #b45309; font-size: .8rem; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .testmode { color: #fbbf24; } }
 
