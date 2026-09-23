@@ -1,7 +1,7 @@
 # Comparison study
 
 A pairwise comparison study of AI-generated images and videos. Participants see two
-candidates for the same prompt and choose the one they prefer, or no preference.
+candidates for the same prompt and answer one question per pair.
 
-Open `index.html` (or the published page) with `?plan=all` to take part. All comparisons run on one page. Answers are
-stored anonymously.
+Open the published page to take part. It starts directly with the first comparison.
+Answers are stored anonymously.
