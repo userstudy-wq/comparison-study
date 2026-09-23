@@ -1,7 +1,0 @@
-/* Fill in after deploying the Apps Script collector (see remote/README.md). */
-window.STUDY_CONFIG = {
-  endpoint: "",            /* Apps Script web app URL ending in /exec. Empty = answers stay in the browser only. */
-  site_key: "",            /* optional shared key, must match SITE_KEY in Code.gs */
-  comparisons: { "default": 20 },   /* comparisons per source and question; 8 sources x 20 = 160 per rater */
-  version: "20260922223600"   /* bumped by remote/bump_version.py on each deploy (cache busting) */
-};
