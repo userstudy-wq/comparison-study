@@ -23,6 +23,11 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
   };
   const SCHEMA = 3;
+  // Launch marker: data saved under an earlier marker (test runs, unsent test answers) is discarded, never sent.
+  if (CFG.epoch && store.get('epoch') !== CFG.epoch) {
+    try { for (const k of Object.keys(localStorage)) if (k !== 'rater_id') localStorage.removeItem(k); } catch (e) {}
+    store.set('epoch', CFG.epoch);
+  }
   const raterId = (() => { let r = store.get('rater_id'); if (!r) { r = rid(); store.set('rater_id', r); } return r; })();
   const DATA = await (await fetch(CFG.version && /^\d+$/.test(CFG.version) ? `study.${CFG.version}.json` : 'study.json')).json();
   const params = new URLSearchParams(location.search);
