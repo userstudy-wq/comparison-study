@@ -1,4 +1,5 @@
-/* Static pairwise study. State lives in this browser; every answer is also posted to the collector endpoint. */
+/* Static pairwise study: one continuous run through all sections on a single page.
+   State lives in this browser; every answer is also posted to the collector endpoint. */
 (async function () {
   const CFG = window.STUDY_CONFIG || {};
   const app = document.getElementById('app');
@@ -12,6 +13,7 @@
     return el;
   };
   const rid = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, '0')).join('');
+  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -19,6 +21,7 @@
   const raterId = (() => { let r = store.get('rater_id'); if (!r) { r = rid(); store.set('rater_id', r); } return r; })();
   const DATA = await (await fetch('study.json')).json();
   const comparisons = (sid) => (CFG.comparisons && (CFG.comparisons[sid] || CFG.comparisons.default)) || DATA.studies[sid].default_comparisons;
+  const UA = navigator.userAgent.slice(0, 200);
 
   /* ---------- collector ---------- */
   async function send(item) {
@@ -46,12 +49,9 @@
     return flushing;
   }
   function post(item) { const q = store.get('queue', []); q.push({ eid: rid(), ...item }); store.set('queue', q); return flush(); }
-  async function getCounts(sid) {
+  async function getCounts() {   // per-pair judgment counts across all sections, one request
     if (!CFG.endpoint) return {};
-    try {
-      const r = await fetch(`${CFG.endpoint}?action=counts&study=${encodeURIComponent(sid)}`, { redirect: 'follow' });
-      const j = await r.json(); return (j && j.counts) || {};
-    } catch (e) { return {}; }
+    try { const r = await fetch(`${CFG.endpoint}?action=counts`, { redirect: 'follow' }); const j = await r.json(); return (j && j.counts) || {}; } catch (e) { return {}; }
   }
 
   /* ---------- sampling ---------- */
@@ -60,24 +60,24 @@
     const done = new Set(store.get(`done:${sid}`, []));
     let cands = S.pairs.filter((p) => !done.has(p.id));
     if (!cands.length) cands = S.pairs.slice();
-    for (let i = cands.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
+    shuffle(cands);
     cands.sort((a, b) => (counts[a.id] || 0) - (counts[b.id] || 0));   // stable: keeps the random tie-break
     const chosen = [], prompts = new Set();
     for (const p of cands) { if (prompts.has(p.prompt)) continue; chosen.push(p); prompts.add(p.prompt); if (chosen.length === k) break; }
     for (const p of cands) { if (chosen.length === k) break; if (!chosen.includes(p)) chosen.push(p); }
-    for (let i = chosen.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [chosen[i], chosen[j]] = [chosen[j], chosen[i]]; }
-    return chosen;
+    return shuffle(chosen);
   }
 
-  async function startSession(sid, plan, planIndex, raterCode) {
-    const counts = await getCounts(sid);
-    const pairs = samplePairs(sid, comparisons(sid), counts);
-    const sess = {
-      id: rid(), study: sid, plan, planIndex, raterCode: raterCode || '', created: Date.now(), i: 0,
-      slates: pairs.map((p) => { const flip = Math.random() < 0.5; return { pair: p.id, text: p.text, left: flip ? p.m[1] : p.m[0], right: flip ? p.m[0] : p.m[1], choice: null, seconds: null }; }),
-    };
+  async function startSession(ids, plan, raterCode) {
+    const counts = await getCounts();
+    const slates = [];
+    for (const sid of ids) for (const p of samplePairs(sid, comparisons(sid), counts)) {
+      const flip = Math.random() < 0.5;
+      slates.push({ study: sid, pair: p.id, text: p.text, left: flip ? p.m[1] : p.m[0], right: flip ? p.m[0] : p.m[1], choice: null, seconds: null });
+    }
+    const sess = { id: rid(), studies: ids, plan, raterCode: raterCode || '', created: Date.now(), i: 0, slates };
     store.set(`session:${sess.id}`, sess); store.set('current_session', sess.id);
-    post({ type: 'session_start', session: sess.id, study: sid, rater: raterId, rater_code: sess.raterCode, plan, plan_index: planIndex, n_slates: sess.slates.length, ua: navigator.userAgent.slice(0, 200) });
+    post({ type: 'session_start', session: sess.id, study: ids.join('+'), rater: raterId, rater_code: sess.raterCode, plan, plan_index: 0, n_slates: slates.length, ua: UA });
     location.hash = `s=${sess.id}`;
   }
 
@@ -87,23 +87,25 @@
     const plan = study ? '' : (params.get('plan') || 'all');
     const ids = study ? [study] : DATA.plans[plan];
     if (!ids || ids.some((i) => !DATA.studies[i])) { app.replaceChildren(h('p', { class: 'muted', style: 'margin-top:2rem' }, 'This link is not valid.')); return; }
+    const total = ids.reduce((a, s) => a + comparisons(s), 0);
     const secs = ids.reduce((a, s) => a + comparisons(s) * (DATA.studies[s].media === 'video' ? 14 : 7), 0);
     const cur = store.get('current_session'); const curSess = cur && store.get(`session:${cur}`);
     const resumable = curSess && curSess.i < curSess.slates.length;
     const code = h('input', { type: 'text', id: 'code', maxlength: '32', placeholder: 'e.g. P07', style: 'margin-top:.3rem', value: store.get('rater_code', '') });
-    const btn = h('button', { class: 'btn primary', onclick: async () => { btn.disabled = true; store.set('rater_code', code.value.trim()); await startSession(ids[0], plan, 0, code.value.trim()); } }, 'Start');
+    const btn = h('button', { class: 'btn primary', onclick: async () => { btn.disabled = true; store.set('rater_code', code.value.trim()); await startSession(ids, study || plan, code.value.trim()); } }, resumable ? 'Start a new run' : 'Start');
     app.replaceChildren(
       h('div', { style: 'max-width:820px' },
         h('h1', null, 'Image and video comparison study'),
         h('p', { class: 'muted' }, 'Thank you for helping. You will see pairs of AI-generated images or videos made from the same text prompt and pick the one you prefer, or say you have no preference. There are no right answers; we want your honest impression.'),
         h('div', { class: 'card' },
-          h('h2', { style: 'margin-top:0' }, 'What to expect'),
-          h('ol', { class: 'parts' }, ids.map((s) => h('li', null, `${DATA.studies[s].label} — ${comparisons(s)} comparisons`))),
-          h('p', { class: 'small muted' }, `Estimated time: about ${Math.max(1, Math.round(secs / 60))} minutes in total. You can stop between parts and continue later with the same link in the same browser.`),
+          h('h2', { style: 'margin-top:0' }, `${total} comparisons, all on this page`),
+          h('p', { class: 'small muted' }, `They run straight through in ${ids.length} sections; the question at the top tells you what to judge in each one.`),
+          h('ol', { class: 'parts' }, ids.map((s) => h('li', null, `${DATA.studies[s].label} — ${comparisons(s)}`))),
+          h('p', { class: 'small muted' }, `Estimated time: about ${Math.max(1, Math.round(secs / 60))} minutes. You can close the tab at any point and continue later by opening the same link in the same browser.`),
           h('p', { class: 'small muted' }, 'Please use a laptop or desktop with a reasonably large screen, and let the videos play before answering. Your answers are stored anonymously; nothing identifying you is recorded.'),
         ),
         h('div', { class: 'card' }, h('label', { class: 'small muted', for: 'code' }, 'Participant code (optional, if you were given one)'), h('br'), code),
-        resumable ? h('p', null, h('button', { class: 'btn primary', onclick: () => { location.hash = `s=${cur}`; } }, 'Resume where I left off'), ' ', h('span', { class: 'hint' }, `${curSess.slates.length - curSess.i} comparisons remaining in ${DATA.studies[curSess.study].label}`)) : null,
+        resumable ? h('p', null, h('button', { class: 'btn primary', onclick: () => { location.hash = `s=${cur}`; } }, 'Resume where I left off'), ' ', h('span', { class: 'hint' }, `${curSess.slates.length - curSess.i} of ${curSess.slates.length} comparisons remaining`)) : null,
         h('p', null, btn, !CFG.endpoint ? h('span', { class: 'hint warn' }, ' Collector not configured: answers stay in this browser only.') : null),
       ),
     );
@@ -111,34 +113,38 @@
 
   function renderSession(id) {
     const sess = store.get(`session:${id}`);
-    if (!sess) { app.replaceChildren(h('p', { class: 'muted', style: 'margin-top:2rem' }, 'This session is not available in this browser. ', h('a', { href: '#' }, 'Start again'))); return; }
-    const S = DATA.studies[sess.study];
-    const planIds = sess.plan ? DATA.plans[sess.plan] : [sess.study];
+    if (!sess) { app.replaceChildren(h('p', { class: 'muted', style: 'margin-top:2rem' }, 'This session is not available in this browser. ', h('a', { href: location.pathname + location.search }, 'Start again'))); return; }
+    const ids = sess.studies || [sess.study];
     let shownAt = 0, timer = null;
     const mediaEl = (m, label) => {
       if (m.endsWith('.mp4')) { const v = h('video', { src: `media/${m}`, poster: `media/${m.slice(0, -4)}.jpg`, muted: true, loop: true, playsinline: true, preload: 'auto', 'aria-label': label }); v.muted = true; v.play().catch(() => {}); return v; }
       return h('img', { src: `media/${m}`, alt: label });
     };
+    function currentStudy() { return DATA.studies[sess.slates[sess.i].study]; }
     async function answer(choice) {
+      const S = currentStudy();
       if (performance.now() - shownAt < (S.min_seconds || 0) * 1000) return;
       const sl = sess.slates[sess.i];
       sl.choice = choice; sl.seconds = (performance.now() - shownAt) / 1000;
       app.querySelectorAll('.choices .btn').forEach((b) => (b.disabled = true));
-      const done = store.get(`done:${sess.study}`, []); done.push(sl.pair); store.set(`done:${sess.study}`, done);
+      const done = store.get(`done:${sl.study}`, []); done.push(sl.pair); store.set(`done:${sl.study}`, done);
       sess.i += 1; store.set(`session:${sess.id}`, sess);
-      post({ type: 'judgment', jid: rid(), session: sess.id, study: sess.study, rater: raterId, rater_code: sess.raterCode, position: sess.i - 1, pair: sl.pair, left: sl.left, right: sl.right, choice, seconds: Math.round(sl.seconds * 100) / 100, ua: navigator.userAgent.slice(0, 200) });
-      if (sess.i >= sess.slates.length) post({ type: 'session_complete', session: sess.id, study: sess.study, rater: raterId, rater_code: sess.raterCode, plan: sess.plan, plan_index: sess.planIndex, n_slates: sess.slates.length });
+      post({ type: 'judgment', jid: rid(), session: sess.id, study: sl.study, rater: raterId, rater_code: sess.raterCode, position: sess.i - 1, pair: sl.pair, left: sl.left, right: sl.right, choice, seconds: Math.round(sl.seconds * 100) / 100, ua: UA });
+      if (sess.i >= sess.slates.length) { store.set('current_session', null); post({ type: 'session_complete', session: sess.id, study: ids.join('+'), rater: raterId, rater_code: sess.raterCode, plan: sess.plan, plan_index: 0, n_slates: sess.slates.length, ua: UA }); }
       render();
     }
     function render() {
       app.replaceChildren();
       if (sess.i >= sess.slates.length) return renderDone();
-      const sl = sess.slates[sess.i], total = sess.slates.length;
+      const sl = sess.slates[sess.i], total = sess.slates.length, S = DATA.studies[sl.study];
+      const section = ids.indexOf(sl.study) + 1;
+      const newSection = sess.i === 0 || sess.slates[sess.i - 1].study !== sl.study;
       const btns = S.choices.map((label, k) => h('button', { class: 'btn' + (k === 1 ? '' : ' primary'), disabled: true, onclick: () => answer(['left', 'tie', 'right'][k]) }, label));
       const hint = h('span', { class: 'hint' }, '');
       app.append(
-        h('div', { class: 'top' }, h('div', null, h('b', null, S.label), h('span', { class: 'muted' }, planIds.length > 1 ? ` · part ${sess.planIndex + 1} of ${planIds.length}` : '')), h('div', { class: 'muted' }, `${sess.i + 1} / ${total}`)),
+        h('div', { class: 'top' }, h('div', null, h('b', null, S.label), h('span', { class: 'muted' }, ids.length > 1 ? ` · section ${section} of ${ids.length}` : '')), h('div', { class: 'muted' }, `${sess.i + 1} / ${total}`)),
         h('div', { class: 'progress' }, h('i', { style: `width:${(sess.i / total) * 100}%` })),
+        newSection && ids.length > 1 ? h('p', { class: 'section-note' }, `New section: ${S.label}. ${S.media === 'video' ? 'Each comparison unlocks after the videos have played for a few seconds.' : ''}`) : null,
         h('p', { class: 'question' }, S.question),
         h('p', { class: 'prompt' }, 'Prompt: ', h('b', null, sl.text)),
         h('div', { class: `pair ${S.layout === 'stack' ? 'stack' : ''}` },
@@ -158,14 +164,10 @@
       if (nx) for (const m of [nx.left, nx.right]) { if (!m.endsWith('.mp4')) { const im = new Image(); im.src = `media/${m}`; } else { fetch(`media/${m}`, { headers: { Range: 'bytes=0-262143' } }).catch(() => {}); } }
     }
     function renderDone() {
-      const next = sess.planIndex + 1 < planIds.length ? planIds[sess.planIndex + 1] : null;
-      const box = h('div', { class: 'done' }, h('h1', null, planIds.length > 1 ? `Part ${sess.planIndex + 1} of ${planIds.length} complete` : 'All done'), h('p', { class: 'muted' }, 'Thank you!'),
-        h('p', null, 'Completion code: ', h('span', { class: 'code' }, sess.id.slice(0, 6).toUpperCase())));
       const pending = store.get('queue', []).length;
-      if (pending) box.append(h('p', { class: 'hint warn' }, `${pending} answers are still being sent. Please keep this tab open for a moment.`));
-      if (next) box.append(h('p', null, h('button', { class: 'btn primary', onclick: async (e) => { e.target.disabled = true; await startSession(next, sess.plan, sess.planIndex + 1, sess.raterCode); } }, 'Continue to the next part →')), h('p', { class: 'small muted' }, 'You can also close this tab and come back later using the original link in the same browser.'));
-      else { box.append(h('p', { class: 'muted' }, 'You can close this tab now.')); store.set('current_session', null); }
-      app.append(box);
+      app.append(h('div', { class: 'done' }, h('h1', null, 'All done'), h('p', { class: 'muted' }, 'Thank you!'),
+        h('p', null, 'Completion code: ', h('span', { class: 'code' }, sess.id.slice(0, 6).toUpperCase())),
+        pending ? h('p', { class: 'hint warn' }, `${pending} answers are still being sent. Please keep this tab open for a moment.`) : h('p', { class: 'muted' }, 'You can close this tab now.')));
       flush().then(() => { if (pending) render(); });
     }
     document.onkeydown = (e) => { const map = { '1': 'left', '2': 'tie', '3': 'right' }; const b = app.querySelector('.choices .btn'); if (map[e.key] && b && !b.disabled) answer(map[e.key]); };
