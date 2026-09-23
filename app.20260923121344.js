@@ -49,6 +49,7 @@
         ['Off-prompt items add nothing.', 'Pictures that do not show what the prompt asks for (a cat when the prompt says dog), or broken pictures, do not count as variety.'],
         ['Videos.', 'Compare the five clips of a set with each other. How much a single clip moves does not matter.'],
       ],
+      asks: ['Which set of images or videos has more variety?'],
       questions: ['diversity'],
       secsPer: { image: 8, video: 12 },
     },
@@ -60,6 +61,7 @@
         ['Visual quality.', 'Which looks better as an image or video: sharp, realistic, free of artifacts and of distorted objects, faces or hands. For videos, also smooth motion without flicker or morphing. Ignore the prompt for this question.'],
         ['Prompt match.', 'Which shows what the prompt describes more accurately: the right objects, how many, their colors and positions. Ignore visual quality for this question.'],
       ],
+      asks: ['Which image or video has better visual quality?', 'Which image or video matches the prompt better?'],
       questions: ['quality', 'alignment'],
       secsPer: { image: 11, video: 15 },
     },
@@ -204,7 +206,7 @@
       h('p', { class: 'lede' }, `Thank you for taking part. You will compare pairs of AI-generated images and short videos made from the same text prompt, and choose between them. The study has ${PARTS.length} parts and takes about ${minutes(PARTS)} minutes.`),
       h('table', { class: 'plan' }, h('tbody', null, PARTS.map((p, k) => h('tr', null,
         h('td', { class: 'num' }, `Part ${k + 1}`),
-        h('td', null, h('strong', null, UI[p].title), h('br'), h('span', null, `${practiceOf(p).length} practice examples, then ${totalOf(p)} comparisons`)))))),
+        h('td', null, h('strong', null, UI[p].name), h('ul', { class: 'asks' }, UI[p].asks.map((q) => h('li', null, q)))))))),
       h('p', null, 'Each part starts with a short explanation and a few practice examples that show you what we mean. Please use a laptop or desktop computer.'),
       h('p', { class: 'fine' }, 'Your answers are anonymous. You can close the tab at any point and continue later by opening the same link in the same browser.'),
       h('div', { class: 'actions' }, start, testNote()),
@@ -220,7 +222,7 @@
       h('h1', null, UI[plan].title),
       h('p', { class: 'lede' }, UI[plan].intro),
       rulesList(plan),
-      h('p', null, `First ${practiceOf(plan).length} practice examples with feedback, then ${totalOf(plan)} comparisons without feedback. Answer with the buttons or the number keys shown next to them.`),
+      h('p', null, `You start with a few practice examples with feedback, then ${totalOf(plan)} comparisons without feedback. Answer with the buttons or the number keys shown next to them.`),
       h('div', { class: 'actions' }, start, testNote()),
     );
   }

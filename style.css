@@ -65,6 +65,9 @@ kbd { font: 500 11px/1 var(--mono); color: var(--ink-3); border: 1px solid var(-
 .plan td { padding: 14px 0; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--ink-2); }
 .plan td.num { width: 88px; font: 500 .85rem/1.9 var(--mono); color: var(--ink-3); }
 .plan strong { font-family: var(--serif); font-size: 1.15rem; font-weight: 500; }
+.asks { margin: 6px 0 0; padding-left: 1.1em; color: var(--ink-2); }
+.asks li { margin: 2px 0; }
+.asks li::marker { color: var(--accent); }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 32px; }
 .btn { background: var(--ink); color: var(--paper); border: 1px solid var(--ink); border-radius: 3px; padding: 12px 24px; font-weight: 500; cursor: pointer; }
 .btn:hover:not([disabled]) { background: var(--accent); border-color: var(--accent); }
