@@ -44,14 +44,16 @@
     catch (e) { return 1; }   // unknown for now: behave like the old script, ask again next time
     return serverVersion;
   }
-  async function send(payload) {
+  async function send(payload) {   // true only when the script confirms it; anything else is retried (the v2 script skips duplicates)
     const body = JSON.stringify({ ...payload, site_key: CFG.site_key || '' });
     try {
       const r = await fetch(CFG.endpoint, { method: 'POST', body, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, redirect: 'follow', signal: withTimeout(45000) });
-      if (!r.ok) return false;
-      try { const j = await r.json(); return !(j && j.ok === false); } catch (e) { return true; }
+      const j = await r.json();          // Google sometimes answers with an HTML error page: not JSON, so not confirmed
+      if (j && j.version) serverVersion = j.version;
+      return !!(j && j.ok === true);
     } catch (e) {
-      try { await fetch(CFG.endpoint, { method: 'POST', body, mode: 'no-cors' }); return true; } catch (e2) { return false; }
+      try { await fetch(CFG.endpoint, { method: 'POST', body, mode: 'no-cors' }); } catch (e2) {}   // extra delivery attempt, unconfirmed
+      return false;
     }
   }
   const dropSent = (items) => { const ids = new Set(items.map((x) => x.eid)); store.set('queue', store.get('queue', []).filter((x) => !ids.has(x.eid))); };
@@ -92,7 +94,7 @@
   });
   async function getCounts() {   // per-pair judgment counts, one request; never hold up the first comparison for long
     if (!CFG.endpoint) return {};
-    try { const r = await fetch(`${CFG.endpoint}?action=counts`, { redirect: 'follow', signal: withTimeout(4000) }); const j = await r.json(); if (j && j.version) serverVersion = j.version; return (j && j.counts) || {}; } catch (e) { return {}; }
+    try { const r = await fetch(`${CFG.endpoint}?action=counts`, { redirect: 'follow', signal: withTimeout(8000) }); const j = await r.json(); if (j && j.version) serverVersion = j.version; return (j && j.counts) || {}; } catch (e) { return {}; }
   }
 
   /* ---------- sampling ---------- */
