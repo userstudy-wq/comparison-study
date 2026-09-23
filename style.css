@@ -1,0 +1,55 @@
+:root {
+  color-scheme: light dark;
+  --surface: #fcfcfb; --surface-2: #f3f2ee; --surface-3: #e9e8e3; --line: #e2e1dc;
+  --text: #0b0b0b; --text-2: #52514e; --text-3: #8a8985; --accent: #2a78d6; --accent-soft: #dbe8f9;
+  --radius: 10px; --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --surface: #1a1a19; --surface-2: #232322; --surface-3: #2e2e2c; --line: #363634; --text: #fff; --text-2: #c3c2b7; --text-3: #8f8e88; --accent: #3987e5; --accent-soft: #1e3556; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--surface); color: var(--text); font-family: var(--font); font-size: 16px; line-height: 1.5; }
+.wrap { max-width: 1400px; margin: 0 auto; padding: 0 16px; }
+h1 { font-size: clamp(1.5rem, 3vw, 2.1rem); margin: 1.5rem 0 .5rem; letter-spacing: -.01em; }
+h2 { font-size: 1.2rem; margin: 1.5rem 0 .5rem; }
+p { margin: 0 0 .8rem; }
+.muted { color: var(--text-2); }
+.small { font-size: .875rem; }
+a { color: var(--accent); }
+button { font: inherit; color: inherit; }
+.card { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem 1.2rem; margin: .75rem 0; }
+.btn { border: 1px solid var(--line); background: var(--surface-2); border-radius: 8px; padding: .6rem 1rem; cursor: pointer; font-weight: 500; }
+.btn:hover { background: var(--surface-3); }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; filter: none; }
+input[type=text] { font: inherit; padding: .5rem .7rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
+ol.parts { padding-left: 1.2rem; } ol.parts li { margin: .2rem 0; }
+
+/* rating screen */
+.top { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: baseline; justify-content: space-between; margin-top: 1rem; }
+.progress { height: 6px; background: var(--surface-3); border-radius: 3px; overflow: hidden; margin: .4rem 0 1rem; }
+.progress i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+.question { font-size: 1.15rem; font-weight: 600; margin: .5rem 0 .2rem; }
+.prompt { font-size: 1.05rem; margin: 0 0 .8rem; } .prompt b { font-weight: 600; }
+.pair { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+.pair.stack { grid-template-columns: 1fr; }
+.side { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.side .lab { padding: .45rem .8rem; font-weight: 600; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; }
+.side .lab .k { color: var(--text-3); font-weight: 400; font-size: .85rem; }
+.side .media { background: #111; display: flex; align-items: center; justify-content: center; }
+.side img, .side video { display: block; width: 100%; height: auto; max-height: 78vh; object-fit: contain; }
+.choices { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin: 1rem 0 2rem; }
+.choices .btn { min-width: 160px; }
+.hint { color: var(--text-3); font-size: .85rem; }
+.hint.warn { color: #c2410c; }
+.done { text-align: center; padding: 3rem 1rem; }
+.code { font-family: ui-monospace, monospace; font-size: 1.4rem; letter-spacing: .1em; background: var(--surface-3); padding: .3rem .8rem; border-radius: 8px; }
+
+/* admin */
+table { border-collapse: collapse; width: 100%; font-size: .9rem; margin: .5rem 0 1rem; }
+th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--text-2); font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.links code { user-select: all; background: var(--surface-3); padding: .1rem .4rem; border-radius: 4px; }
+@media (max-width: 700px) { .pair { grid-template-columns: 1fr; } .side img, .side video { max-height: 45vh; } }
